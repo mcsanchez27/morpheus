@@ -1,0 +1,29 @@
+# Environments and Secrets
+.env
+*.env
+*.pem
+*.key
+
+# Logs and telemetry
+logs/
+*.log
+*.jsonl
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# Build and PyInstaller artifacts
+build/
+dist/
+*.spec
+*.exe
+
+# OS specific
+.DS_Store
+Thumbs.db
