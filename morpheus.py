@@ -280,10 +280,14 @@ async def handle_incoming_challenge(message: discord.Message) -> None:
     if not fight:
         return
     
-    # Check if Morpheus is challenged and challenge is still proposed
-    challengee_id = fight.get("challengee_id")
+    # Check if challenge is still proposed
     status = fight.get("status")
-    if challengee_id != bot.user.id or status != "proposed":
+    if status != "proposed":
+        return
+
+    challengee_id = fight.get("challengee_id")
+    # Accept if open challenge (None) or specifically targeted to Morpheus
+    if challengee_id is not None and challengee_id != bot.user.id:
         return
 
     side_a = fight.get("side_a") or "Challenger"
@@ -301,12 +305,14 @@ async def handle_incoming_challenge(message: discord.Message) -> None:
         print(f"⚠️ Failed to create argument thread: {e}")
         return
 
-    # Update fight status to arguing in court.db
+    # Update fight status to arguing in court.db, setting Morpheus as advocate_b
     now_iso = datetime.now(timezone.utc).isoformat()
     success = update_fight_row(
         fight_id,
         status="arguing",
         thread_id=int(thread.id),
+        advocate_b_id=int(bot.user.id),
+        advocate_b_name="Morpheus",
         accepted_at=now_iso,
     )
     if not success:
@@ -314,11 +320,11 @@ async def handle_incoming_challenge(message: discord.Message) -> None:
 
     # Post Morpheus welcome / challenge acceptance post into the new thread
     welcome_msg = (
-        f"⚔️ **Morpheus has accepted the challenge!**\n\n"
+        f"🕶️ **Morpheus has accepted the challenge!**\n\n"
         f"**Matchup:** {side_a} vs {side_b}\n"
         f"🔴 **{side_a}**: <@{fight.get('advocate_a_id')}>\n"
         f"🔵 **{side_b}**: <@{bot.user.id}> *(Morpheus)*\n\n"
-        f"State your case. Post your argument here and Morpheus will counter."
+        f"You believe {side_a} holds supremacy. Present your arguments here, advocate — and Morpheus will counter."
     )
     await thread.send(welcome_msg)
     log_telemetry("argument_thread_opened", {"fight_id": fight_id, "thread_id": thread.id})
@@ -440,19 +446,27 @@ async def on_message(message: discord.Message):
         return
 
     # 1. Check for incoming Fight Bot challenge card
-    is_fight_bot = "Fight Bot" in message.author.name or message.author.bot
+    is_fight_bot = "Fight Bot" in message.author.name or (message.author.bot and message.author.id != bot.user.id)
     if is_fight_bot and message.embeds:
         for embed in message.embeds:
             title = embed.title or ""
             desc = embed.description or ""
-            if "Matchup:" in desc or "Challenge" in title:
-                # Check if Morpheus is mentioned or in court.db
-                if bot.user.mentioned_in(message) or "Morpheus" in desc:
-                    await handle_incoming_challenge(message)
+            if "Matchup:" in desc or "Challenge" in title or "Card" in title:
+                await handle_incoming_challenge(message)
 
     # 2. Check for in-thread fight argument
     if isinstance(message.channel, discord.Thread):
         await handle_in_thread_argument(message)
+
+    # 3. Wake up when mentioned in chat
+    if bot.user.mentioned_in(message) and not message.mention_everyone and not isinstance(message.channel, discord.Thread):
+        clean_text = message.content.replace(f"<@{bot.user.id}>", "").strip()
+        if clean_text:
+            async with message.channel.typing():
+                prompt = f"A user asks: \"{clean_text}\""
+                sys_prompt = "You are Morpheus from The Matrix. Speak with calm, profound wisdom, philosophical gravity, and concise clarity. Do not break character."
+                reply, _ = ask_brain(prompt, sys_prompt)
+            await message.reply(f"🕶️ {reply}")
 
     # 3. Process commands
     await bot.process_commands(message)
