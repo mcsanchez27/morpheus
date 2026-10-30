@@ -19,34 +19,45 @@ Morpheus is packaged for instant standalone execution on Windows:
    & "M:\Projects\Matt\Fight Bot\.venv\Scripts\python.exe" "M:\Tools\Google Tools\morpheus.py"
    ```
 
+### Development setup
+```bash
+pip install -r requirements.txt
+cp .env.example .env   # then fill in the tokens / keys
+python -m pytest       # unit tests for the pure helpers
+```
+
 ---
 
 ## 🧠 Multi-Brain Swappable Architecture (Gemini, Claude, OpenAI)
 
 Morpheus supports hot-swapping AI models seamlessly via `.env` or live in Discord chat!
 
-### Configuration (`M:\Tools\Google Tools\.env`)
+### Configuration (`.env` next to `morpheus.py`, or one of the legacy `M:\...` locations; see `.env.example`)
 ```ini
 # Primary Provider: "gemini" (default) | "claude" | "openai"
 LLM_PROVIDER=gemini
 
 # Specific Model Overrides (Optional)
 GEMINI_MODEL=gemini-2.5-flash
-CLAUDE_MODEL=claude-3-5-haiku-20241022
+CLAUDE_MODEL=claude-haiku-5-5
 OPENAI_MODEL=gpt-4o-mini
 
 # API Keys
 GEMINI_API_KEY=your_gemini_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
 OPENAI_API_KEY=your_openai_key_here
+
+# Fight Bot integration
+FIGHTBOT_DB_PATH=M:/Projects/Matt/Fight Bot/data/court.db
+FIGHTBOT_USER_ID=            # optional, pins challenge detection to Fight Bot's user ID
 ```
 
 ### Live Discord In-Chat Brain Swapping
-Any authorized user can inspect or swap Morpheus's brain on the fly:
+Anyone can inspect the brain; switching it requires the bot owner or the **Manage Server** permission (it can spend paid API credits):
 - `!m brain`: Displays active provider and model status.
-- `!m brain claude`: Swaps instantly to **Anthropic Claude 3.5 Haiku** (spends your \$100/mo Claude Max credits!).
+- `!m brain claude`: Swaps instantly to **Anthropic Claude Haiku 5.5** (billed to your Anthropic API account; a Claude Max subscription does not cover API usage).
 - `!m brain gemini`: Swaps instantly to **Google Gemini 2.5 Flash** (fast, free tier).
-- `!m debate <matchup>`: Commands Morpheus to argue persuasively citing combat feats.
+- `!m debate <matchup>`: Commands Morpheus to argue persuasively citing combat feats (15s per-user cooldown).
 - `!m ping`: Checks gateway latency and connection health.
 - `!m status`: Displays live uptime, latency, and active brain stats.
 
@@ -77,22 +88,18 @@ Any authorized user can inspect or swap Morpheus's brain on the fly:
 
 If another AI agent (Antigravity, Jules, Claude, OpenAI, or a local model) is tasked with driving or extending Morpheus:
 
-### 1. Autonomous Match Playing (`player2_harness.py`)
-Morpheus listens for Fight Bot challenge embeds (`on_message` in `morpheus.py`). To automate full match gameplay:
-- Listen for cards in `#match-arena` (`1560800071661125745`).
-- Parse the fighter assigned to Morpheus.
-- Generate arguments via `ask_brain()`.
-- Post the rebuttal directly into the match thread.
+### 1. Autonomous Match Playing (built into `morpheus.py`)
+Morpheus listens for Fight Bot challenge embeds (`on_message` in `morpheus.py`) and plays Player 2 end to end:
+- Detects challenge cards from Fight Bot (by `FIGHTBOT_USER_ID`, or by author name) and looks the fight up in `court.db`.
+- Accepts open challenges or ones targeted at Morpheus, opens the argument thread, and claims `advocate_b` in `court.db`.
+- Generates one rebuttal per fight via `ask_brain_async()` when the opponent posts, then marks itself rested.
+- LLM and SQLite calls run off the event loop (`asyncio.to_thread`) so the gateway heartbeat never stalls.
 
 ### 2. Headless CLI Messaging
-Any script or AI can send messages via Morpheus without booting the full gateway listener:
-```powershell
-& "M:\Projects\Matt\Fight Bot\.venv\Scripts\python.exe" "M:\Tools\Google Tools\discord_tool.py" --bot morpheus send <channel_id> "<message>"
-```
+`discord_tool.py` (headless send helper) lives outside this repository in `M:\Tools\Google Tools\`; it is not part of this codebase.
 
 ### 3. Telemetry Log
-Morpheus streams all interaction telemetry to:
-`M:\Tools\Google Tools\logs\morpheus_telemetry.jsonl`
+Morpheus streams all interaction telemetry to `logs/morpheus_telemetry.jsonl` next to `morpheus.py` (gitignored).
 Format:
 ```json
 {"timestamp": "2026-10-16T23:31:12Z", "event": "morpheus_online", "data": {"user": "Morpheus#0167", "id": 1560794354744819782}}
