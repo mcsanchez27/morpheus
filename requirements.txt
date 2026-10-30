@@ -1,0 +1,4 @@
+discord.py>=2.3,<3
+
+# Development / tests
+pytest>=8
